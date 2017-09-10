@@ -1,0 +1,672 @@
+# Exploratory Data Analysis - Red & White Wines 
+
+#### by Darryl Ma
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+# Load all of the packages that you end up using in your analysis in this code
+# chunk.
+
+# Notice that the parameter "echo" was set to FALSE for this code chunk. This
+# prevents the code from displaying in the knitted HTML output. You should set
+# echo=FALSE for all code chunks in your file, unless it makes sense for your
+# report to show the code that generated a particular plot.
+
+# The other parameters for "message" and "warning" should also be set to FALSE
+# for other code chunks once you have verified that each plot comes out as you
+# want it to. This will clean up the flow of your report.
+
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(GGally)
+library(scales)
+library(memisc)
+library(pander)
+```
+
+```{r echo=FALSE, Load_the_Data}
+# Load the data
+red <- read.csv('wineQualityReds.csv')
+white <- read.csv('wineQualityWhites.csv')
+
+red['color'] <- 'red'
+white['color'] <- 'white'
+
+wines <- rbind(red, white)
+
+# Re-numbering wines
+wines$X <- c(0:6496)
+
+# Creating new variables to convert quality into an ordered variable, 
+# categorize wines into low, medium and high quality wines
+wines$quality.ordered <- factor(wines$quality, ordered = T)
+wines$quality.bucket <- with(wines, cut(wines$quality, 
+                                        breaks=c(0, 5, 7, 10), ordered=TRUE))
+wines$quality.category <- ifelse(wines$quality.bucket == '(0,5]', "low", 
+                          ifelse(wines$quality.bucket == '(5,7]', 
+                                 "medium", "high"))
+```
+
+# Background
+
+The purpose of this project is to emulate the process of exploring a data set
+and eventually extract meaningful insights. For this particular exercise, a 
+database of wines was explored. For each entry of wine, various properties
+such as acidity, density, alcoholic content and pH along with a subjective
+quality rating of 0 to 10 were provided. I set two main questions to be
+answered through this exploration:
+
+1. What properties can be used to differentiate red and white wines?
+2. Can the quality rating be estimated using a combination of properties?
+
+Below is the source of the dataset being explored: 
+
+P. Cortez, A. Cerdeira, F. Almeida, T. Matos and J. Reis. Modeling wine 
+preferences by data mining from physicochemical properties. In Decision 
+Support Systems, Elsevier, 47(4):547-553. ISSN: 0167-9236.
+
+### High Level Characteristics of Dataset
+
+* Number of observations: 6,497
+* Number of attributes: 13
+    1. fixed.acidity -> most acids involved with wine where it is fixed or 
+    nonvolatile (does not evaporate readily) [g/dm^3]
+    2. volatile.acidity -> the amount of acetic acid in wine, which at  
+    high levels can lead to an unpleasant, vinegar taste [g/dm^3]
+    3. citric.acid -> found in small quantities, citric acid can add 
+    'freshness' and flavor to wines [g/dm^3]
+    4. reisdual.sugar -> the amount of sugar remaining after fermentation stops, 
+    it's rare to find wines with less than 1 gram/liter and wines with greater 
+    than 45 grams/liter are considered sweet [g/dm^3]
+    5. chlorides -> the amount of salt in the wine [g/dm^3]
+    6. free.sulfur.dioxide -> the free form of SO2 exists in equilibrium 
+    between molecular SO2 (as a dissolved gas) and bisulfite ion; it prevents 
+    microbial growth and oxidation of wine [mg/dm^3]
+    7. total.sulfur.dioxide -> amount of free and bound forms of S02; in low 
+    concentrations, SO2 is mostly undetectable in wine, but at free SO2 
+    concentrations over 50 ppm, SO2 becomes evident in the nose and taste of 
+    wine [mg/dm^3]
+    8. density -> the density of wine is close to that of water depending 
+    on the percent of alcohol and sugar content [g/cm^3]
+    9. pH -> describes how acidic or basic a wine is on a scale from 0 
+    (very acidic) to 14 (very basic); most wines are between 3-4 on the pH scale
+    10. sulphates -> a wine additive, which can contribute to sulfur dioxide gas 
+    (S02) levels and acts as an antimicrobial and antioxidant [g/dm^3]
+    11. alcohol -> the percent alcohol content of the wine [% by volume]
+    12. quality -> output variable (based on sensory data) [score between 0 
+    and 10]
+    13. color -> indicates color of the wine [red/white]
+    14. quality.bucket -> segregate wines into three quality buckets: (0,5],
+    (5,7], and (7,10]
+    15. quality.category -> segragate wines into three categories: low (0.5], 
+    medium (5,7], and high (7,10]
+
+* Structure of dataset:
+
+```{r echo=FALSE}
+str(wines)
+```
+
+* Summary of dataset:
+
+```{r echo=FALSE}
+pandoc.table(summary(wines))
+```
+  
+# Univariate Plots Section
+
+```{r echo=FALSE}
+# Helper function to plot a single histogram
+plotHistogram <- function(x, xlabel, bw, qstart, qend) {
+  ggplot(data = wines, aes(x = x)) +
+    geom_histogram(binwidth = bw) +
+    xlab(xlabel) +
+    xlim(quantile(x, qstart), quantile(x, qend))
+}
+
+# Helper function to plot a single bar plot
+plotBar <- function(x, xlabel) {
+  ggplot(data = wines, aes(x = x)) +
+    geom_bar() +
+    xlab(xlabel)
+}
+
+# Helper function to plot a histogram for white wines and a histogram for red
+# wines on the same plot
+plotRedWhiteDensity <- function(x, xlabel, bw, qstart, qend) {
+  ggplot(data = wines, aes(x = x)) +
+    geom_density(binwidth = bw, aes(fill = color, alpha = 0.5, adjust=0.5,
+                                      y = ..density../sum(..density..)*100)) +
+    xlab(xlabel) +
+    xlim(quantile(x, qstart), quantile(x, qend)) +
+    ylab("Percentage (%)") +
+    scale_alpha_continuous(name = "alpha")
+}
+```
+
+Below are univariate plots for each wine property: 
+
+```{r echo=FALSE, warning=FALSE, fig.width=7}
+plotHistogram(wines$fixed.acidity, "Fixed Acidity", 0.1, 0, 1)
+```
+
+There is a high concentration of wines with fixed acidity around the median of 7 
+g/dm^3 but there are some outliers that increases the mean to 7.2g/dm^3.
+
+```{r echo=FALSE, warning=FALSE, fig.width=7}
+plotHistogram(wines$volatile.acidity, "Volatile Acidity", 0.01, 0, 1)
+```
+
+There appears to be some bimodalism with volatile acid, with a strong peak at 
+0.25g/dm^3 and another weaker peak at 0.58g/dm^3. Also there are a few outliers 
+that deviate quite significantly from the median and mean that reach a maximum
+of 1.58 g/dm^3. At such high levels, one would assume that the wine would have
+a strong vinegar taste. Is this an indication that the wine has gone bad?
+
+```{r echo=FALSE, warning=FALSE, fig.width=7}
+plotHistogram(wines$citric.acid, "Citric Acid", 0.01, 0, 1)
+```
+
+In general, citric acid demonstrates a normal distribution, whereby median and 
+mean are almost equal at 0.31g/dm^3 and 0.32g/dm^3, respectively. There is 
+strange spike at 0.5g/dm^3.
+
+```{r echo=FALSE, warning=FALSE, fig.width=7}
+plotHistogram(wines$residual.sugar, "Residual Sugar", 0.1, 0, 0.999)
+```
+
+The plot for residual sugar is right skewed where there are a significant 
+number of outliers with higher sugar content. Most wines, however, are 
+concentrated around 3g/dm^3 (median).The plot above shows that the variability
+in sugar content in wines is quite wide.
+
+```{r echo=FALSE, warning=FALSE, fig.width=7}
+plotHistogram(wines$chlorides, "Chlorides", 0.002, 0, 0.995)
+```
+
+There appears to be some bimodalism with chlorides, with a strong peak at 
+0.04g/dm^3 and another weaker peak at 0.075g/dm^3.
+
+```{r echo=FALSE, warning=FALSE, fig.width=7}
+plotHistogram(wines$free.sulfur.dioxide, "Free Sulfur Dioxide", 1, 0, 0.999)
+```
+
+The plot for free sulfur dioxide is right skewed where there are a significant 
+number of outliers with higher concentrations of free sulfur dioxide. 
+Most wines, however, are concentrated around 29mg/dm^3 (median). 
+
+```{r echo=FALSE, warning=FALSE, fig.width=7}
+plotHistogram(wines$total.sulfur.dioxide, "Total Sulfur Dioxide", 3, 0, 0.999)
+```
+
+There appears to be some bimodalism with total sulfur dioxide, with a strong 
+peak at 120mg/dm^3 and another weaker peak at 25mg/dm^3.
+
+```{r echo=FALSE, warning=FALSE, fig.width=7}
+plotHistogram(wines$density, "Density", 0.0005, 0, 0.999)
+```
+
+There appears to be some bimodalism with density, with two almost equal peaks  
+at 0.993g/cm^3 and another weaker peak at 0.996g/cm^3. There is one white wine 
+with a very high density of 1.039g/cm^3, but this is the very same wine
+with a residual sugar level of 65.8g/dm^3 which is roughly 12 times the 
+average residual sugar level of 5.4g/dm^3. This may be a very specialized 
+type of wine manufactured for a very niche market.
+
+```{r echo=FALSE, warning=FALSE, fig.width=7}
+plotHistogram(wines$pH, "pH", 0.01, 0, 0.999)
+```
+
+pH exhibits a very normal distribution, whereby median and mean are almost 
+equal at 3.21 and 3.22, respectively. 
+
+```{r echo=FALSE, warning=FALSE, fig.width=7}
+plotHistogram(wines$sulphates, "Sulphates", 0.01, 0, 0.999)
+```
+
+The plot for sulpahtes is slightly right skewed where the mean at 0.53g/dm^3 
+is slightly greater than the median at 0.51g/dm^3. Most wines, however, are 
+concentrated around 0.51g/dm^3 (median). 
+
+```{r echo=FALSE, warning=FALSE, fig.width=7}
+plotHistogram(wines$alcohol, "Alcohol", 0.1, 0, 0.999)
+```
+
+The plot for alcohol is right skewed with a peak at 9%. Given that the median 
+is 10.3%, we can see that this ditribution does not follow a normal 
+distribution.
+
+```{r echo=FALSE, warning=FALSE, fig.width=7}
+plotBar(wines$quality.ordered, "Quality")
+```
+
+Quality appears to be normally distributed with median equal to 6 and mean 
+equal to 5.8.
+
+I was slightly concerned that there were so many variables that exhibited 
+bimodalism. Below are those list of variables: 
+
+1. volatile acidity
+2. citric acid
+3. residual sugar
+4. chlorides
+5. free sulfur dioxide
+6. total sulfur dioxide
+7. density
+8. alcohol 
+
+However, I wondered whether this was simply because white and red wines differ 
+for these particular properties. Suspecting this was the case, I re-plotted all
+the graphs above, differentiating between red and white wines:
+
+```{r echo=FALSE, warning=FALSE, fig.width=8, fig.height=12}
+p1 <- plotRedWhiteDensity(wines$fixed.acidity, "Fixed Acidity", 0.1, 0, 0.99)
+p2 <- plotRedWhiteDensity(wines$volatile.acidity, "Volatile Acidity", 
+                          0.01, 0, 0.99)
+p3 <- plotRedWhiteDensity(wines$citric.acid, "Citric Acid", 0.01, 0, 0.99)
+p4 <- plotRedWhiteDensity(wines$residual.sugar, "Residual Sugar", 0.1, 0, 0.99)
+p5 <- plotRedWhiteDensity(wines$chlorides, "Chlorides", 0.002, 0, 0.99)
+p6 <- plotRedWhiteDensity(wines$free.sulfur.dioxide, "Free Sulfur Dioxide", 
+                          1, 0, 0.99)
+p7 <- plotRedWhiteDensity(wines$total.sulfur.dioxide, "Total Sulfur Dioxide", 
+                          1, 0, 0.99)
+p8 <- plotRedWhiteDensity(wines$density, "Density", 0.0001, 0, 0.99)
+p9 <- plotRedWhiteDensity(wines$pH, "pH", 0.01, 0, 0.99)
+p10 <- plotRedWhiteDensity(wines$sulphates, "Sulphates", 0.05, 0, 0.99)
+p11 <- plotRedWhiteDensity(wines$alcohol, "Alcohol", 0.1, 0, 0.99)
+p12 <- plotRedWhiteDensity(wines$quality, "Quality", 0.5, 0, 1)
+
+grid.arrange(p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11,p12, ncol = 2)
+```
+
+True enough, the plots above show that for almost all properties except 
+fixed acidity, alcohol, and quality, there is a clear distinction between red 
+and white wines, which accounts for the bimodalism in most cases. For example, 
+red wines have a distinctively lower total sulphur dioxide concentration 
+compared to white wines, which is the reason for the bimodalism when the 
+datasets are observed together.
+
+However even for the properties that are seemingly normally distributed, when 
+the red and white wine samples are analyzed separate, properties such as pH are 
+distinctively higher for red wines compared to white wines.
+
+# Univariate Analysis
+
+This dataset contains 6,497 observations (i.e. 6,497 different types of wines - 
+1,599 red wines and 4,898 white wines). Each observation has 13 variables or 
+properties that describe the characteristics of the wine. Of the 13 properties, 
+11 are numeric, 1 is an integer, and 1 was a string variable. 3 additional 
+variables were created: quality.ordered, quality.bucket and quality.category. 
+This was to help analyze quality as an ordered variable as well as segregate
+the wines into categories of low, medium and high quality.
+
+Whilst investigating, I did find some bimodal distributions but it seems 
+the bimodalism was due more in part to differences in properties between red and 
+white wines rather than bimodalism inherent to the variables themselves. Further 
+investigation showed that white and red wines are distinctively different for 
+almost all properties except fixed acidity, alcohol, and quality. This is an 
+important observation as it meant that any future analysis may require 
+red and white wines to be analyzed separately.
+
+Another observation was a noticeable spike in counts at the citric acid level 
+of 0.5 for both red and white wines. A quick search on 
+[Wikipedia](https://en.wikipedia.org/wiki/Acids_in_wine#Citric_acid) showed 
+that  wine grapes naturally have an citric acidity of 0.05. Citric acid is often
+artificially added to wines to boost the wine's acidity. Therefore the spike at 
+0.5 may be particular to a certain brand of wine.
+
+Ultimately, this univariate exploration helped me achieve my first goal, which 
+was to identify properties that can be used to differentiate between red and 
+white whites. Some key observations:
+
+1. If you are looking for a sweet wine, you will have more chances of finding
+what you are looking for if you purchase a white wine
+2. White wines tend to be less dense (i.e. lighter) compared to red wines
+3. White wines tend to be slightly more acidic than red wines
+4. If you are unsure about the alcoholic content of a bottle of wine, 
+it would not matter if it is red or white wine as the distribution of alcholic
+content is similar for both types of wine.
+ 
+To achieve the next goal, which was to identify a model that can 
+estimate wine quality based on its properties, it is important to
+get sufficient data points for low, medium and high quality wines. 
+Unfortunately, based on the univariate exploration above, the lowest quality 
+wine is rated at 3 and the highest quality wine is rated at 9, with 
+50% of the wines being rated either 5 or 6, meaning there are fewer data 
+points to help build the prediction model at higher and lower ratings.
+
+# Bivariate Plots Section
+
+```{r echo=FALSE}
+# Helper function to plot a scatter plot given two variables
+plotScatter <- function(x, xlabel, y, ylabel, qstart, qend) {
+  ggplot(data = white, aes(x = x, y = y)) +
+    geom_point(alpha = 0.1) +
+    xlab(xlabel) +
+    xlim(quantile(x, qstart), quantile(x, qend)) +
+    ylab(ylabel) +
+    ylim(quantile(y, qstart), quantile(y, qend)) +
+    geom_smooth(method = 'lm', color = 'red') + 
+    scale_color_brewer(type = 'div')
+}
+
+# Helper function to plot boxplots given two variables
+plotBoxPlot <- function(x, xlabel, y, ylabel, qstart, qend) {
+  ggplot(data=wines, aes(y = y, x = x)) + 
+  geom_boxplot() +
+    xlab(xlabel) +
+    ylab(ylabel) +
+    ylim(quantile(y, qstart), quantile(y, qend))
+}
+```
+
+The best course of action when you do not know where to begin is to plot 
+everything in the hopes that something catches your attention and helps narrow 
+down the variables most relevant for your analysis. However, as higlighted 
+before, because red and white wines are distinctively different for many of 
+these properties, the pairings plot below only compares variables for 
+white wines:
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.width=10, fig.height=10}
+ggpairs(data = subset(wines, wines$color == "white")) + 
+        theme(text = element_text(size = 8))
+```
+
+Below are the variables that have a medium or high correlation coefficient 
+assuming the following definitions:
+
+* High correlation: 0.5 to 1.0 or -0.5 to -1.0
+* Medium correlation: 0.3 to 0.5 or -0.3 to -0.5
+* Low correlation: -0.3 to 0.3
+
+Variable 1          | Variable 2           | Corr Coefficient | Correlation
+----------------    | ---------------------| -----------------|------------
+Residual Sugar      | Density              | 0.839            | High
+Alcohol             | Density              | -0.78            | High
+Total Sulfur Dioxide| Density              | 0.53             | High
+Residual Sugar      | Alcohol              | -0.451           | Medium
+Alcohol             | Total Sulfur Dioxide | -0.449           | Medium
+pH                  | Fixed Acidity        | -0.426           | Medium
+Residual Sugar      | Total Sulfur Dioxide | 0.401            | Medium
+
+I have excluded correlation relationships with the variable X, relationships
+between free and total sulfur dioxide as these two variables are essentially
+measuring sulfur dioxide, as well as relationships with quality as these will
+be addressed separately.
+
+At first glance, it makes sense that density, residual sugar and alcohol have
+a strong correlation. After all, density is a function of percent alcohol 
+and sugar content. See plots below:
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.width=7, fig.height=10}
+p1 <- plotScatter(white$residual.sugar, "Residual Sugar", white$density, 
+                  "Density", 0, 0.99)
+p2 <- plotScatter(white$alcohol, "Alcohol", white$density, "Density", 0, 0.99)
+
+grid.arrange(p1,p2, ncol = 1)
+```
+
+Wine density increases as more sugar is added but decreases as alcholic 
+content increases.
+
+Another expected correlation is the negative relationship between fixed acid
+and pH. That is, as fixed acidity content levels increase, the pH level
+decreases or becomes more acidic. See plot below:
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, fig.width=7}
+p1 <- plotScatter(white$fixed.acidity, "Fixed Acidity", white$pH, "pH", 0, 1)
+
+grid.arrange(p1, ncol = 1)
+```
+
+For quality, the following two variables had significant correlation:
+
+* alcohol 
+* density
+
+**Note**: When analyzing quality, we considered both red and white wines 
+together as there did not appear to be a clear disctinction between the wines 
+in terms of quality.
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+p1 <- plotBoxPlot(wines$quality.ordered, "Quality", wines$alcohol, 
+                  "Alcohol", 0, 0.99)
+p2 <- plotBoxPlot(wines$quality.ordered, "Quality", wines$density, 
+                  "Density", 0, 0.99)
+
+grid.arrange(p1,p2, ncol = 2)
+```
+
+In general, as alcoholic content increases, the quality rating increases. 
+At a alcoholic levels of ~10%, however, the alcoholic content doesn't seem to 
+influence the quality rating of the wine. As one might expect, because there 
+is a negative relationship between percent alcohol content and density, as 
+density decreases, quality of the wine increases.
+
+But given the strong relationship between alcohol, density and quality,
+I was surprised not to see a similar relationship between density, residual 
+sugar and quality:
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+p1 <- plotBoxPlot(wines$quality.ordered, "Quality", wines$residual.sugar, 
+                  "Residual Sugar", 0, 0.99)
+
+grid.arrange(p1, ncol = 2)
+```
+
+As shown above, a wine sweetness has little correlation to its quality.
+
+# Bivariate Analysis
+
+Some of the relationships observed were expected, and it was reassuring that
+the data re-confirmed these relationship such as:
+
+1. Postive correlation between density and residual sugar in white wines, 
+which was the strongest relationship
+2. Negative correlation between density and alcohol in white wines
+3. Negative correlation between fixed acidity and pH in white wines
+
+Other findings were new learnings for me as I did not expect to find 
+a relationship between quality, alcohol and density:
+
+1. Above an alcohol level of 10%, a wine is considered of higher quality as 
+alcoholic content increases
+2. Wines that are less dense are considered to be of higher quality
+3. Sugar content does not factor significantly into how a wine is rated. 
+At the same sugar level, quality ratings varied between 3 and 7.
+
+One observation I found particularly interesting was that we found correlation
+between fixed acidity and pH yet did not find a correlation between volatile
+acidity and pH. I would have assumed that both fixed and volatile acidity 
+would have had a strong negative correlation with pH.
+
+# Multivariate Plots Section
+
+The following plots try to explore if there is a distinction between various
+wine qualities by looking at the relationship between alcoholic content 
+and density:
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+ggplot(data = wines, aes(x = alcohol, y = density)) +
+    geom_point(aes(color = quality.ordered)) +
+    xlim(quantile(wines$alcohol, 0), quantile(wines$alcohol, 0.99)) +
+    ylim(quantile(wines$density, 0), quantile(wines$density, 0.99)) +
+    geom_smooth(method = 'lm', aes(color = quality.ordered)) + 
+    scale_color_brewer(type = 'seq', name = 'Quality') + 
+  facet_wrap(~ color)
+```
+
+The separation of colors, where higher quality wines are concentrated on the 
+right and lower quality wines are concentrated on the left, a behavior that is 
+observed in both red and white wines, suggests that alcoholic content and 
+density could be a good proxy to estimate wine quality. The following is a 
+linear model of such an estimation:
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+m1 <- lm(quality ~ alcohol, data = wines)
+m2 <- update(m1, ~ . + density)
+m3 <- update(m2, ~ . + fixed.acidity)
+mtable(m1, m2, m3, sdigits = c(3))
+```
+
+To checked its precision, the model was used to predict quality at 95% 
+confidence for a few test cases:
+
+```{r echo=FALSE, Multivariate_Plots}
+# Loading in test case
+testData = read.csv('testData.csv')
+
+# Create data frame of results 
+modelEstimate = predict(m3, newdata = testData,
+                        interval="prediction", level = .95)
+modelEstimate <- data.frame(modelEstimate)
+
+ggplot(data=modelEstimate, aes(x = testData$alcohol)) +
+  geom_line(aes(y = modelEstimate$fit, color = 'Fit')) +
+  geom_line(aes(y = modelEstimate$lwr, color = 'Lower Bound')) +
+  geom_line(aes(y = modelEstimate$upr, color = 'Upper Bound')) +
+  ylab("Predicted Quality") +
+  xlab("Alcohol") +
+  scale_color_discrete(name = 'Legend')
+```
+
+Below is the average difference between the lower/upper bounds of the 
+95% confidence interval and best-fit prediction:
+
+```{r echo=FALSE}
+# Calcuate the mean different between the lower/upper bounds and fit
+modelEstimate$diff_lwr <- modelEstimate$lwr - modelEstimate$fit
+modelEstimate$diff_upr <- modelEstimate$upr - modelEstimate$fit
+mean(modelEstimate$diff_lwr)
+mean(modelEstimate$diff_upr)
+```
+
+From statistics above, it shows that the linear model can predict quality with
+95% confidence of +/- 1.53. Meaning that if the model predicts a quality 
+rating of 5.6, you can assume with 95% confidence that the actual quality value
+is somewhere in between 4.1 and 7.1. Obviously this is not perfect, but if you 
+are simply trying to gauge if the wine is of low, medium or high quality, then
+it is probably safe to assume that it is of medium quality.
+
+# Multivariate Analysis
+
+The relationship between alcohol, density and quality was reconfirmed by 
+plotting all three variables at once and observing the separation of qualities
+by color. That is, wines with lower density and higher alcoholic content 
+were rated higher and, inversely, wines with higher density and lower 
+alcoholic content were rated lower. This charateristic was true of both 
+red and white wines.
+
+For this analysis a linear model was created using alcohol content, density, 
+and fixed acidity to predict quality ratings. The r squared value of the 
+predictive model was quite weak at 0.199, which rendered a 95% confidence 
+interval of +/- 1.53 when predicting quality ratings. Nevertheless, if the 
+objective of the model is to simply to differentiate between low, medium and 
+high quality wines, this model should suffice.
+
+------
+
+# Final Plots and Summary
+
+### Plot One
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=8, fig.height=12}
+p1 <- plotRedWhiteDensity(wines$volatile.acidity, "Volatile Acidity (g/dm^3)", 
+                          0.01, 0, 0.99)
+p2 <- plotRedWhiteDensity(wines$chlorides, "Chlorides (g/dm^3)", 0.002, 0, 0.99)
+p3 <- plotRedWhiteDensity(wines$free.sulfur.dioxide, 
+                          "Free Sulfur Dioxide (mg/dm^3)", 1, 0, 0.99)
+p4 <- plotRedWhiteDensity(wines$total.sulfur.dioxide, 
+                          "Total Sulfur Dioxide (mg/dm^3)", 1, 0, 0.99)
+p5 <- plotRedWhiteDensity(wines$density, "Density (g/cm^3)", 0.0001, 0, 0.99)
+p6 <- plotRedWhiteDensity(wines$pH, "pH", 0.01, 0, 0.99)
+p7 <- plotRedWhiteDensity(wines$sulphates, "Sulphates (g/dm^3)", 0.05, 0, 0.99)
+
+grid.arrange(p1,p2,p3,p4,p5,p6,p7, ncol = 2, top = "Red Vs White Wines")
+```
+
+### The Difference Between Red and White Wines 
+
+The plots above demonstrate the distinct differences between red and white 
+wines. In general, red whites tend to have higher volatile acidity, 
+cloride content, density, pH levels, and sulphate content. Whilst white wines 
+tend to have higher sulfur dioxide content.
+
+### Plot Two
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(data = wines, aes(x = alcohol, y = density)) +
+    geom_point(aes(color = quality.ordered)) +
+    xlim(quantile(wines$alcohol, 0), quantile(wines$alcohol, 0.99)) +
+    ylim(quantile(wines$density, 0), quantile(wines$density, 0.99)) +
+    geom_smooth(method = 'lm', aes(color = quality.ordered)) +
+    scale_alpha_continuous(name="alpha") +
+    scale_color_brewer(type = 'seq', name = 'Quality') + 
+    xlab("Alcohol (% of volume)") +
+    ylab("Density (g/cm^3)") +
+    labs(title = "Quality Vs Alcohol Vs Density") +
+  facet_wrap(~ color)
+```
+
+### Quality Vs Alcohol Vs Density
+
+The plot above demonstrates the relationship between quality, alcohol and 
+density whereby quality rating are higher as alcohol content increases
+and density decreases and, inversely, quality ratings are lower as alcohol 
+content decreases and density increases. This behavior is apparent in both red 
+and white wines.
+
+
+### Plot Three
+```{r echo=FALSE}
+ggplot(data=modelEstimate, aes(x = testData$alcohol)) +
+  geom_line(aes(y = modelEstimate$fit, color = 'Fit')) +
+  geom_line(aes(y = modelEstimate$lwr, color = 'Lower Bound')) +
+  geom_line(aes(y = modelEstimate$upr, color = 'Upper Bound')) +
+  ylab("Quality") +
+  xlab("Alcohol (% of volume)") +
+  labs(title = "Predicting Quality") +
+  scale_color_discrete(name = 'Legend')
+```
+
+### Accuracy of Linear Model
+
+The linear model above shows predicted quality ratings along with the 
+lower and upper bounds of the 95% confidence interval. The relatively large 
+difference between the lower and upper bounds deomnstrates that the model is 
+not particularly precise in predicting quality based on alcoholic content, 
+density and fixed acidity values. However at the very least, it can be used to 
+distinguish between low, medium and high quality wines.
+
+------
+
+# Reflection
+
+At the start of this investigation, two goals were established:
+
+1. To find properties that differentiate white and red wines
+2. To predict quality rating based on a combination of wine properties 
+
+For the first goal, we discovered that pH, sulphates, chlorides, volatile
+acidity, free/total sulfur dioxide and density can all be used to differentiate
+between red and white wines. 
+
+For the second goal, a linear model was created to estimate quality based
+on alcoholic content, density and fixed acidity. Though the r squared value of 
+the model was weak at 0.199, the model showed that it could be somewhat useful 
+in differentiating between low, medium and high quality wines. 
+
+Given the inability to accurately estimate wine quality ratings, one may 
+conclude that wine ratings are somewhat subjective in nature and are highly 
+dependent on the personal tastes of the testers. Another concern to consider 
+is the limitation of the variables provided. Perhaps other variables like 
+year of production, wine brand, location where grapes were harvested, etc. 
+have more of an influence over quality rating than the variables that we 
+analyzed.
+
+In conclusion, the practical takeaways from this exploration are as such:
+
+1. If you want to appear like an amateur wine connoisseur, check the alcohol 
+content label and test for density before giving an assessment
+2. Make sure you provide a vague assessment (i.e. good, average, bad) 
+3. If your assessment of the quality is way off, just attribute it to
+preference in taste
